@@ -20,7 +20,10 @@ library(bslib)
 
 
 emit=read_csv("owid-co2-data.csv")%>% 
-  filter(year>1950) %>% select(country,year,iso_code,population,co2,co2_per_capita) %>% drop_na(co2)
+  filter(year>1920) %>% select(country,year,iso_code,population,co2,co2_per_capita) %>% mutate(co2 = coalesce(co2, 0),
+                                                                                               co2_per_capita = coalesce(co2_per_capita, 0))
+
+
 
 accumulate_by <- function(dat, var) {
   var <- lazyeval::f_eval(var, dat)
@@ -41,24 +44,24 @@ ui <- fluidPage(
   # Sidebar with a slider input for number of bins 
   sidebarLayout(
     sidebarPanel(
-        selectizeInput(
-          inputId = "checkboxes",
-          label= "Select Countries",
-          choices = unique(emit$country),
-          selected="United States",
-          multiple = TRUE,
-          options = list(
-            plugins = list("remove_button"),
-            delimiter = ",",
-            create =FALSE,
-            persist = FALSE,
-            highlight = FALSE,
-            selectOnTab= TRUE,
-            searchfield= list("placeholder"="Search...")
-    )),
-        selectInput("year",
-                h4("Select a year:"),
-                choices = unique(emit$year)))  ,
+      selectizeInput(
+        inputId = "checkboxes",
+        label= "Select Countries",
+        choices = unique(emit$country),
+        selected="United States",
+        multiple = TRUE,
+        options = list(
+          plugins = list("remove_button"),
+          delimiter = ",",
+          create =FALSE,
+          persist = FALSE,
+          highlight = FALSE,
+          selectOnTab= TRUE,
+          searchfield= list("placeholder"="Search...")
+        )),
+      selectInput("year",
+                  h4("Select a year:"),
+                  choices = unique(emit$year)))  ,
     
     # Show a plot of the generated distribution
     mainPanel(
@@ -72,7 +75,7 @@ ui <- fluidPage(
 
 # Define server logic 
 server <- function(input, output) {
-
+  
   output$distPlot <- renderPlotly({
     thisCountry=input$checkboxes
     
@@ -114,84 +117,84 @@ server <- function(input, output) {
     f
   })
   
-output$distPlot2 <- renderPlotly({
-  thisCountry=input$checkboxes
-  
-  fig=emit %>% accumulate_by(~year) %>% filter(country %in% c(thisCountry))  
-  fig <- fig %>%
-    plot_ly(
-      x = ~year, 
-      y = ~co2,
-      split = ~country,
-      frame = ~frame, 
-      type = 'scatter',
-      mode = 'lines', 
-      line = list(simplyfy = F)
+  output$distPlot2 <- renderPlotly({
+    thisCountry=input$checkboxes
+    
+    fig=emit %>% accumulate_by(~year) %>% filter(country %in% c(thisCountry))  
+    fig <- fig %>%
+      plot_ly(
+        x = ~year, 
+        y = ~co2,
+        split = ~country,
+        frame = ~frame, 
+        type = 'scatter',
+        mode = 'lines', 
+        line = list(simplyfy = F)
+      )
+    
+    fig <- fig %>% layout(
+      xaxis = list(
+        title = "Year",
+        zeroline = F
+      ),
+      yaxis = list(
+        title = "Annual CO2 (tonnes)",
+        zeroline = F
+      )
+    ) 
+    fig <- fig %>% animation_opts(
+      frame = 100, 
+      transition = 0, 
+      redraw = FALSE
     )
-  
-  fig <- fig %>% layout(
-    xaxis = list(
-      title = "Year",
-      zeroline = F
-    ),
-    yaxis = list(
-      title = "Annual CO2 (tonnes)",
-      zeroline = F
+    fig <- fig %>% animation_slider(
+      hide = F
     )
-  ) 
-  fig <- fig %>% animation_opts(
-    frame = 100, 
-    transition = 0, 
-    redraw = FALSE
-  )
-  fig <- fig %>% animation_slider(
-    hide = F
-  )
-  fig <- fig %>% animation_button(
-    x = 1.1, xanchor = "right", y = 0, yanchor = "bottom"
-  )
+    fig <- fig %>% animation_button(
+      x = 1.1, xanchor = "right", y = 0, yanchor = "bottom"
+    )
+    
+    fig
+  })
   
-  fig
-})
- 
- output$distable <- renderDT({
-
-  thisCountry=input$checkboxes 
-  whatyear=input$year
-  selection_table= emit %>% select(country,year,population,co2_per_capita) %>% filter(year==whatyear,country %in% thisCountry) 
+  output$distable <- renderDT({
+    
+    thisCountry=input$checkboxes 
+    whatyear=input$year
+    selection_table= emit %>% select(country,year,population,co2_per_capita) %>% filter(year==whatyear,country %in% thisCountry) 
+    
+    callback <- c(
+      "$('#DataTables_Table_0_length select').css('color', '#000');",
+      "$('#DataTables_Table_0_filter input').css('color', '#000');"
+    )
+    
+    
+    
+    datatable(selection_table, callback=JS(callback),colnames = c("Country", "Year", "Population", "CO2 (tonnes) Per Capita "), options = list(
+      initComplete = JS(
+      )))
+    
+  })
+  output$distable2 <- renderDT({
+    
+    thisCountry=input$checkboxes 
+    whatyear=input$year
+    selection_table= emit %>% select(country,year,population,co2) %>% filter(year==whatyear,country %in% thisCountry) 
+    
+    
+    callback <- c(
+      "$('#DataTables_Table_0_length select').css('color', '#000');",
+      "$('#DataTables_Table_0_filter input').css('color', '#000');"
+    )
+    
+    
+    
+    datatable(selection_table, callback=JS(callback),colnames = c("Country", "Year", "Population", "Annual CO2 (tonnes)"), options = list(
+      initComplete = JS(
+      )))
+    
+  })
   
-  callback <- c(
-    "$('#DataTables_Table_0_length select').css('color', '#000');",
-    "$('#DataTables_Table_0_filter input').css('color', '#000');"
-  )
-  
-
-   
-datatable(selection_table, callback=JS(callback),colnames = c("Country", "Year", "Population", "CO2 (tonnes) Per Capita "), options = list(
-  initComplete = JS(
- )))
-
- })
- output$distable2 <- renderDT({
-   
-   thisCountry=input$checkboxes 
-   whatyear=input$year
-   selection_table= emit %>% select(country,year,population,co2) %>% filter(year==whatyear,country %in% thisCountry) 
-   
-   
-   callback <- c(
-     "$('#DataTables_Table_0_length select').css('color', '#000');",
-     "$('#DataTables_Table_0_filter input').css('color', '#000');"
-   )
-   
-   
-   
-   datatable(selection_table, callback=JS(callback),colnames = c("Country", "Year", "Population", "Annual CO2 (tonnes)"), options = list(
-     initComplete = JS(
-       )))
-   
- })
-
 }
 
 # Run the application 
